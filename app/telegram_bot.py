@@ -22,7 +22,7 @@ def notify(msg):
 
 def notify_signal(s): notify(f"Sinal {s.get('action')} {s.get('timeframe')} ${s.get('price',0):.2f} RSI:{s.get('rsi',0):.1f}")
 def notify_trade_opened(trade,approved,reason):
-    if approved: notify(f"Trade aberto | Entrada:${float(trade.get('entry_price',0)):.2f} SL:${float(trade.get('stop_loss',0)):.2f} TP:${float(trade.get('take_profit',0)):.2f}")
+    if approved: notify(f"Trade aberto | ${float(trade.get('entry_price',0)):.2f} SL:${float(trade.get('stop_loss',0)):.2f} TP:${float(trade.get('take_profit',0)):.2f}")
     else: notify(f"Rejeitado: {reason}")
 def notify_trade_closed(t):
     pnl=float(t.get('pnl_usdt') or 0); ep=float(t.get('exit_price') or 0)
@@ -32,52 +32,43 @@ def notify_daily_summary(s): notify(f"Resumo | PnL:${float(s.get('pnl_total_usdt
 def notify_kill_switch(reason): notify(f"KILL SWITCH {reason}")
 
 async def cmd_start(u:Update,c:ContextTypes.DEFAULT_TYPE):
-    await u.message.reply_text(
-        "TTI Finance Bot ativo!
-
-"
-        "/status  — Capital e posicao atual
-"
-        "/trades  — Ultimos 5 trades
-"
-        "/report  — Relatorio geral
-"
-        "/kill    — Para operacoes
-"
-        "/resume  — Retoma operacoes
-"
-        "/help    — Esta mensagem")
+    nl="\n"
+    msg=("TTI Finance Bot ativo!"+nl+nl+
+         "/status  - Capital e posicao atual"+nl+
+         "/trades  - Ultimos 5 trades"+nl+
+         "/report  - Relatorio geral"+nl+
+         "/kill    - Para operacoes"+nl+
+         "/resume  - Retoma operacoes"+nl+
+         "/help    - Esta mensagem")
+    await u.message.reply_text(msg)
 
 async def cmd_status(u:Update,c:ContextTypes.DEFAULT_TYPE):
     s=database.get_portfolio_stats(); rs=database.get_risk_state(); t=database.get_open_trade()
+    nl="\n"
     pos=f"${float(t.get('entry_price',0)):.2f} ({t.get('action')})" if t else "Nenhuma"
-    await u.message.reply_text(
-        f"<b>Status</b>
-Capital:${float(s.get('current_capital_usdt',0)):.2f} USDT
-"
-        f"PnL:${float(s.get('pnl_total_usdt',0)):.2f} ({float(s.get('pnl_pct_total',0)):.2f}%)
-"
-        f"Posicao:{pos}
-Trades hoje:{rs.get('trades_today',0)} | {TRADING_MODE.upper()}",
-        parse_mode="HTML")
+    msg=(f"<b>Status</b>"+nl+
+         f"Capital:${float(s.get('current_capital_usdt',0)):.2f} USDT"+nl+
+         f"PnL:${float(s.get('pnl_total_usdt',0)):.2f} ({float(s.get('pnl_pct_total',0)):.2f}%)"+nl+
+         f"Posicao:{pos}"+nl+f"Trades hoje:{rs.get('trades_today',0)} | {TRADING_MODE.upper()}")
+    await u.message.reply_text(msg,parse_mode="HTML")
 
 async def cmd_trades(u:Update,c:ContextTypes.DEFAULT_TYPE):
     trades=database.get_trades(limit=5)
     if not trades: await u.message.reply_text("Nenhum trade."); return
+    nl="\n"
     lines=["<b>Ultimos 5 trades:</b>"]
     for t in trades:
         pnl=float(t.get('pnl_usdt') or 0)
-        lines.append(f"• {t.get('action')} {t.get('timeframe')} | {t.get('status')} | {'+'if pnl>=0 else''}${pnl:.2f}")
-    await u.message.reply_text("
-".join(lines),parse_mode="HTML")
+        lines.append(f"- {t.get('action')} {t.get('timeframe')} | {t.get('status')} | {'+' if pnl>=0 else ''}${pnl:.2f}")
+    await u.message.reply_text(nl.join(lines),parse_mode="HTML")
 
 async def cmd_report(u:Update,c:ContextTypes.DEFAULT_TYPE):
     s=database.get_portfolio_stats()
-    await u.message.reply_text(
-        f"<b>Relatorio</b>
-Trades:{s.get('total_trades',0)} Win:{float(s.get('win_rate',0)):.1f}%
-"
-        f"PnL:${float(s.get('pnl_total_usdt',0)):.2f} USDT",parse_mode="HTML")
+    nl="\n"
+    msg=(f"<b>Relatorio</b>"+nl+
+         f"Trades:{s.get('total_trades',0)} Win:{float(s.get('win_rate',0)):.1f}%"+nl+
+         f"PnL:${float(s.get('pnl_total_usdt',0)):.2f} USDT")
+    await u.message.reply_text(msg,parse_mode="HTML")
 
 async def cmd_kill(u:Update,c:ContextTypes.DEFAULT_TYPE):
     database.update_risk_state(kill_switch_active=True,kill_switch_reason="cmd /kill")
@@ -88,7 +79,5 @@ async def cmd_resume(u:Update,c:ContextTypes.DEFAULT_TYPE):
     await u.message.reply_text("Kill switch OFF. Bot retomando operacoes.")
 
 async def cmd_help(u:Update,c:ContextTypes.DEFAULT_TYPE):
-    await u.message.reply_text(
-        "<b>Comandos:</b>
-/start /status /trades /report /kill /resume /help",
-        parse_mode="HTML")
+    nl="\n"
+    await u.message.reply_text("<b>Comandos:</b>"+nl+"/start /status /trades /report /kill /resume /help",parse_mode="HTML")
