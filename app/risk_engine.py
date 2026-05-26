@@ -21,7 +21,17 @@ def check(signal, risk_state, portfolio):
 
 def calculate_position_size(capital_usdt, entry_price, sl_pct=DEFAULT_SL_PCT):
     risk_amount = capital_usdt * RISK_PER_TRADE_PCT
-    return {"quantity": risk_amount/(entry_price*sl_pct),
-            "risk_amount": risk_amount,
-            "stop_loss": entry_price*(1-sl_pct),
-            "take_profit": entry_price*(1+DEFAULT_TP_PCT)}
+    quantity    = risk_amount / (entry_price * sl_pct)
+
+    # Cap: position value cannot exceed 95% of available capital (no leverage)
+    max_quantity = (capital_usdt * 0.95) / entry_price
+    if quantity > max_quantity:
+        quantity    = max_quantity
+        risk_amount = quantity * entry_price * sl_pct
+
+    return {
+        "quantity":    quantity,
+        "risk_amount": risk_amount,
+        "stop_loss":   entry_price * (1 - sl_pct),
+        "take_profit": entry_price * (1 + DEFAULT_TP_PCT),
+    }
