@@ -235,3 +235,13 @@ def log(level, component, message, trade_id=None):
             conn.commit()
     except Exception: pass
     finally: release_conn(conn)
+
+def update_portfolio_capital(portfolio_id, delta_usdt):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE portfolio SET current_capital_usdt = current_capital_usdt + %s WHERE id=%s",
+                (delta_usdt, portfolio_id))
+            conn.commit()
+    finally: release_conn(conn)

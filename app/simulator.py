@@ -50,6 +50,7 @@ def check_and_close_position(trade):
     pnl_usdt=((current-entry) if action=="BUY" else (entry-current))*qty-fees
     closed=database.close_trade(trade["id"],current,status,pnl_usdt,
                                  pnl_usdt/eur_rate,(pnl_usdt/(entry*qty))*100,fees)
+    database.update_portfolio_capital(trade["portfolio_id"], pnl_usdt)
     rs=database.get_risk_state()
     database.update_risk_state(
         daily_pnl_usdt=float(rs.get("daily_pnl_usdt") or 0)+pnl_usdt,
