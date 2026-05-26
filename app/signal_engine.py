@@ -1,6 +1,6 @@
 from app import database, fetcher, indicators
 from app.config import (RSI_OVERSOLD, RSI_OVERBOUGHT, TIMEFRAMES,
-                        ADX_MIN_TREND, EMA_MIN_DIST_PCT, VOLUME_FILTER_MULTIPLIER,
+                        ADX_MIN_TREND,
                         FUNDING_RATE_MAX_BUY, FUNDING_RATE_MIN_SELL)
 
 def _get_4h_trend(symbol):
@@ -24,7 +24,7 @@ def detect_signal(symbol, timeframe):
     ema20 = ind["ema20"]; ema50 = ind["ema50"]
     prev20 = ind["prev_ema20"]; prev50 = ind["prev_ema50"]
     rsi   = ind["rsi"]; atr = ind["atr"]
-    adx   = ind["adx"]; vol_ratio = ind["volume_ratio"]
+    adx   = ind["adx"]
 
     action = None
     if prev20 <= prev50 and ema20 > ema50 and RSI_OVERSOLD < rsi < RSI_OVERBOUGHT:
@@ -35,13 +35,6 @@ def detect_signal(symbol, timeframe):
         return None
 
     if adx < ADX_MIN_TREND:
-        return None
-
-    ema_dist = abs(ema20 - ema50) / price if price > 0 else 0
-    if ema_dist < EMA_MIN_DIST_PCT:
-        return None
-
-    if vol_ratio < VOLUME_FILTER_MULTIPLIER:
         return None
 
     trend_4h = "NEUTRAL"
@@ -63,8 +56,7 @@ def detect_signal(symbol, timeframe):
     return {
         "action": action, "symbol": symbol, "timeframe": timeframe,
         "price": price, "rsi": rsi, "ema20": ema20, "ema50": ema50,
-        "atr": atr, "adx": adx, "vol_ratio": vol_ratio,
-        "funding": funding, "trend_4h": trend_4h,
+        "atr": atr, "adx": adx, "funding": funding, "trend_4h": trend_4h,
     }
 
 def check_all_timeframes(symbol):
