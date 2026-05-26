@@ -30,11 +30,13 @@ def init_db():
                 pnl_usdt NUMERIC(20,8), pnl_eur NUMERIC(20,8), pnl_pct NUMERIC(10,4),
                 fees_usdt NUMERIC(20,8), signal_rsi NUMERIC(10,4),
                 signal_ema20 NUMERIC(20,8), signal_ema50 NUMERIC(20,8),
+                signal_atr NUMERIC(20,8),
                 ai_decision VARCHAR(10) DEFAULT 'PENDING',
                 ai_confidence INTEGER, ai_reasoning TEXT,
                 opened_at TIMESTAMPTZ DEFAULT NOW(),
                 closed_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS symbol VARCHAR(20) DEFAULT 'BTCUSDT'")
+            cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS signal_atr NUMERIC(20,8)")
             cur.execute('''CREATE TABLE IF NOT EXISTS signals (
                 id SERIAL PRIMARY KEY, symbol VARCHAR(20), timeframe VARCHAR(5), action VARCHAR(10),
                 price NUMERIC(20,8), rsi NUMERIC(10,4), ema20 NUMERIC(20,8), ema50 NUMERIC(20,8),
@@ -124,18 +126,18 @@ def save_signal(symbol, timeframe, action, price, rsi, ema20, ema50):
 
 def open_trade(portfolio_id, symbol, timeframe, action, entry_price, stop_loss,
                take_profit, quantity, risk_amount_usdt, rsi, ema20, ema50,
-               ai_decision=None, ai_confidence=None, ai_reasoning=None):
+               ai_decision=None, ai_confidence=None, ai_reasoning=None, signal_atr=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO trades "
                 "(portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,"
-                "quantity,risk_amount_usdt,signal_rsi,signal_ema20,signal_ema50,"
+                "quantity,risk_amount_usdt,signal_rsi,signal_ema20,signal_ema50,signal_atr,"
                 "ai_decision,ai_confidence,ai_reasoning) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
                 (portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,
-                 quantity,risk_amount_usdt,rsi,ema20,ema50,
+                 quantity,risk_amount_usdt,rsi,ema20,ema50,signal_atr,
                  ai_decision or "PENDING",ai_confidence,ai_reasoning))
             r = cur.fetchone(); conn.commit(); return _row(cur, r)
     finally: release_conn(conn)
@@ -147,6 +149,14 @@ def close_trade(trade_id, exit_price, status, pnl_usdt, pnl_eur, pnl_pct, fees_u
             cur.execute("UPDATE trades SET exit_price=%s,status=%s,pnl_usdt=%s,pnl_eur=%s,pnl_pct=%s,fees_usdt=%s,closed_at=NOW() WHERE id=%s RETURNING *",
                 (exit_price,status,pnl_usdt,pnl_eur,pnl_pct,fees_usdt,trade_id))
             r = cur.fetchone(); conn.commit(); return _row(cur, r)
+    finally: release_conn(conn)
+
+def update_trade_sl(trade_id, new_sl):
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE trades SET stop_loss=%s WHERE id=%s", (new_sl, trade_id))
+            conn.commit()
     finally: release_conn(conn)
 
 def get_open_trade(symbol=None):
