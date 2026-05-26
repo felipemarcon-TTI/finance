@@ -19,7 +19,7 @@ EXCLUDED_SYMBOLS = {
 }
 
 TIMEFRAMES             = ["4h", "1h", "15m"]
-RISK_PER_TRADE_PCT     = 0.01
+RISK_PER_TRADE_PCT     = 0.03
 SLIPPAGE_PCT           = 0.001
 FEE_PCT                = 0.001
 MAX_TRADES_PER_DAY     = 5
