@@ -1,8 +1,8 @@
 import time
 from datetime import datetime,timezone,date
-from app import database,fetcher,signal_engine,simulator,telegram_bot
+from app import database,fetcher,signal_engine,simulator,telegram_bot,ai_filter
 from app.config import (INITIAL_CAPITAL_EUR,LOOP_INTERVAL_SECONDS,MONITOR_INTERVAL_SECONDS,
-                        TRADING_MODE,TOP_SYMBOLS_COUNT,SYMBOLS_OVERRIDE)
+                        TRADING_MODE,TOP_SYMBOLS_COUNT,SYMBOLS_OVERRIDE,USE_AI_FILTER)
 from app.risk_engine import check as risk_check
 
 class Scheduler:
@@ -30,7 +30,8 @@ class Scheduler:
         database.get_risk_state()
         self._refresh_symbols()
         telegram_bot.start()
-        telegram_bot.notify(f"Bot iniciado. EUR{INITIAL_CAPITAL_EUR} {TRADING_MODE.upper()} | {len(self._symbols)} pares")
+        ai_tag = " | AI ON" if USE_AI_FILTER else ""
+        telegram_bot.notify(f"Bot iniciado. EUR{INITIAL_CAPITAL_EUR} {TRADING_MODE.upper()} | {len(self._symbols)} pares{ai_tag}")
         database.log("INFO","scheduler","Bot iniciado")
         while True:
             try: self._tick()
@@ -62,13 +63,28 @@ class Scheduler:
 
     def _process_signal(self,signal):
         sym=signal["symbol"]
-        database.log("INFO","sig",f"{sym} {signal['action']} {signal['timeframe']} ${signal['price']:.4f}")
-        telegram_bot.notify_signal(signal); rs=database.get_risk_state()
+        database.log("INFO","sig",
+            f"{sym} {signal['action']} {signal['timeframe']} "
+            f"${signal['price']:.4f} vol:{signal.get('vol_ratio',0):.1f}x 4h:{signal.get('trend_4h','?')}")
+
+        sentiment=fetcher.get_cryptopanic_sentiment(sym)
+
+        ai_confidence=None; ai_reasoning=None
+        if USE_AI_FILTER:
+            approved,ai_confidence,ai_reasoning=ai_filter.validate(signal,sentiment)
+            database.log("INFO","ai",f"{sym}: {'OK' if approved else 'REJECTED'} {ai_confidence}% {ai_reasoning}")
+            if not approved:
+                telegram_bot.notify_signal(signal)
+                telegram_bot.notify_trade_opened(None,False,f"AI ({ai_confidence}%): {ai_reasoning}")
+                return
+
+        telegram_bot.notify_signal(signal)
+        rs=database.get_risk_state()
         ok,reason=risk_check(signal,rs,self.portfolio)
         if not ok:
             database.log("INFO","risk",f"{sym}: {reason}")
             telegram_bot.notify_trade_opened(None,False,reason); return
-        trade=simulator.execute_trade(signal,self.portfolio)
+        trade=simulator.execute_trade(signal,self.portfolio,ai_confidence,ai_reasoning)
         telegram_bot.notify_trade_opened(trade,True,"OK")
         database.log("INFO","sim",f"Opened {trade['id']} {sym} {signal['action']} ${float(trade['entry_price']):.4f}")
 

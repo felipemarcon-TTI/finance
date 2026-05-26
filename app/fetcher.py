@@ -1,5 +1,5 @@
 import requests, time
-from app.config import EXCLUDED_SYMBOLS
+from app.config import EXCLUDED_SYMBOLS, CRYPTOPANIC_TOKEN
 
 BINANCE_BASE    = "https://api.binance.com"
 BINANCE_FUTURES = "https://fapi.binance.com"
@@ -12,7 +12,7 @@ def _get(url, params=None, retries=3):
             return r.json()
         except Exception as e:
             if i < retries-1: time.sleep(2)
-            else: print(f"[fetcher] error {url}: {e}"); return None
+            else: print(f"[fetcher] {url}: {e}"); return None
 
 def get_klines(symbol, interval, limit=100):
     data = _get(f"{BINANCE_BASE}/api/v3/klines", {"symbol":symbol,"interval":interval,"limit":limit})
@@ -41,8 +41,29 @@ def get_top_symbols_by_volume(n=20):
                 and float(t["quoteVolume"]) > 10_000_000]
         usdt.sort(key=lambda x: float(x["quoteVolume"]), reverse=True)
         result = [t["symbol"] for t in usdt[:n]]
-        print(f"[fetcher] top {n} symbols: {result}")
+        print(f"[fetcher] top {n}: {result}")
         return result
     except Exception as e:
-        print(f"[fetcher] get_top_symbols error: {e}")
+        print(f"[fetcher] top_symbols error: {e}")
         return ["BTCUSDT","ETHUSDT","BNBUSDT"]
+
+def get_cryptopanic_sentiment(symbol):
+    if not CRYPTOPANIC_TOKEN: return None
+    coin = symbol[:-4] if symbol.endswith("USDT") else symbol[:3]
+    try:
+        url = "https://cryptopanic.com/api/free/v1/posts/"
+        r = requests.get(url, params={"auth_token":CRYPTOPANIC_TOKEN,
+            "currencies":coin,"filter":"hot","public":"true"}, timeout=8)
+        if r.status_code != 200: return None
+        items = r.json().get("results",[])[:10]
+        if not items: return "neutral"
+        pos = sum(i.get("votes",{}).get("positive",0) for i in items)
+        neg = sum(i.get("votes",{}).get("negative",0) for i in items)
+        total = pos + neg
+        if total == 0: return "neutral"
+        if pos/total > 0.6: return "bullish"
+        if neg/total > 0.6: return "bearish"
+        return "neutral"
+    except Exception as e:
+        print(f"[fetcher] cryptopanic {coin}: {e}")
+        return None

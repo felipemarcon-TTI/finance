@@ -24,32 +24,42 @@ def init_db():
                 id SERIAL PRIMARY KEY, portfolio_id INTEGER REFERENCES portfolio(id),
                 symbol VARCHAR(20) DEFAULT 'BTCUSDT', timeframe VARCHAR(5), action VARCHAR(10),
                 status VARCHAR(20) DEFAULT 'OPEN' CHECK (status IN ('OPEN','CLOSED_TP','CLOSED_SL','CLOSED_MANUAL','ERROR')),
-                entry_price NUMERIC(20,8), exit_price NUMERIC(20,8), stop_loss NUMERIC(20,8), take_profit NUMERIC(20,8),
-                quantity NUMERIC(20,8), risk_amount_usdt NUMERIC(20,8), pnl_usdt NUMERIC(20,8),
-                pnl_eur NUMERIC(20,8), pnl_pct NUMERIC(10,4), fees_usdt NUMERIC(20,8),
-                signal_rsi NUMERIC(10,4), signal_ema20 NUMERIC(20,8), signal_ema50 NUMERIC(20,8),
-                ai_decision VARCHAR(10) DEFAULT 'PENDING', ai_confidence INTEGER, ai_reasoning TEXT,
-                opened_at TIMESTAMPTZ DEFAULT NOW(), closed_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW())''')
+                entry_price NUMERIC(20,8), exit_price NUMERIC(20,8),
+                stop_loss NUMERIC(20,8), take_profit NUMERIC(20,8),
+                quantity NUMERIC(20,8), risk_amount_usdt NUMERIC(20,8),
+                pnl_usdt NUMERIC(20,8), pnl_eur NUMERIC(20,8), pnl_pct NUMERIC(10,4),
+                fees_usdt NUMERIC(20,8), signal_rsi NUMERIC(10,4),
+                signal_ema20 NUMERIC(20,8), signal_ema50 NUMERIC(20,8),
+                ai_decision VARCHAR(10) DEFAULT 'PENDING',
+                ai_confidence INTEGER, ai_reasoning TEXT,
+                opened_at TIMESTAMPTZ DEFAULT NOW(),
+                closed_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS symbol VARCHAR(20) DEFAULT 'BTCUSDT'")
             cur.execute('''CREATE TABLE IF NOT EXISTS signals (
                 id SERIAL PRIMARY KEY, symbol VARCHAR(20), timeframe VARCHAR(5), action VARCHAR(10),
                 price NUMERIC(20,8), rsi NUMERIC(10,4), ema20 NUMERIC(20,8), ema50 NUMERIC(20,8),
-                was_executed BOOLEAN DEFAULT FALSE, rejection_reason TEXT, detected_at TIMESTAMPTZ DEFAULT NOW())''')
+                was_executed BOOLEAN DEFAULT FALSE, rejection_reason TEXT,
+                detected_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute('''CREATE TABLE IF NOT EXISTS risk_state (
-                id INTEGER PRIMARY KEY DEFAULT 1, kill_switch_active BOOLEAN DEFAULT FALSE,
-                kill_switch_reason TEXT, has_open_position BOOLEAN DEFAULT FALSE, current_trade_id INTEGER,
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                kill_switch_active BOOLEAN DEFAULT FALSE, kill_switch_reason TEXT,
+                has_open_position BOOLEAN DEFAULT FALSE, current_trade_id INTEGER,
                 trades_today INTEGER DEFAULT 0, consecutive_losses INTEGER DEFAULT 0,
                 daily_pnl_usdt NUMERIC(20,8) DEFAULT 0, trading_date DATE DEFAULT CURRENT_DATE,
-                last_updated TIMESTAMPTZ DEFAULT NOW(), CONSTRAINT single_row CHECK (id = 1))''')
+                last_updated TIMESTAMPTZ DEFAULT NOW(),
+                CONSTRAINT single_row CHECK (id = 1))''')
             cur.execute('''CREATE TABLE IF NOT EXISTS daily_summaries (
-                id SERIAL PRIMARY KEY, summary_date DATE UNIQUE, total_signals INTEGER DEFAULT 0,
-                executed_trades INTEGER DEFAULT 0, winning_trades INTEGER DEFAULT 0,
-                losing_trades INTEGER DEFAULT 0, pnl_usdt NUMERIC(20,8) DEFAULT 0,
-                pnl_eur NUMERIC(20,8) DEFAULT 0, win_rate NUMERIC(5,2) DEFAULT 0,
-                closing_capital_usdt NUMERIC(20,8), created_at TIMESTAMPTZ DEFAULT NOW())''')
+                id SERIAL PRIMARY KEY, summary_date DATE UNIQUE,
+                total_signals INTEGER DEFAULT 0, executed_trades INTEGER DEFAULT 0,
+                winning_trades INTEGER DEFAULT 0, losing_trades INTEGER DEFAULT 0,
+                pnl_usdt NUMERIC(20,8) DEFAULT 0, pnl_eur NUMERIC(20,8) DEFAULT 0,
+                win_rate NUMERIC(5,2) DEFAULT 0, closing_capital_usdt NUMERIC(20,8),
+                created_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute('''CREATE TABLE IF NOT EXISTS system_logs (
-                id SERIAL PRIMARY KEY, level VARCHAR(10) CHECK (level IN ('INFO','WARN','ERROR')),
-                component VARCHAR(50), message TEXT, trade_id INTEGER, created_at TIMESTAMPTZ DEFAULT NOW())''')
+                id SERIAL PRIMARY KEY,
+                level VARCHAR(10) CHECK (level IN ('INFO','WARN','ERROR')),
+                component VARCHAR(50), message TEXT, trade_id INTEGER,
+                created_at TIMESTAMPTZ DEFAULT NOW())''')
             conn.commit()
     finally: release_conn(conn)
 
@@ -112,12 +122,21 @@ def save_signal(symbol, timeframe, action, price, rsi, ema20, ema50):
             sid = cur.fetchone()[0]; conn.commit(); return sid
     finally: release_conn(conn)
 
-def open_trade(portfolio_id, symbol, timeframe, action, entry_price, stop_loss, take_profit, quantity, risk_amount_usdt, rsi, ema20, ema50):
+def open_trade(portfolio_id, symbol, timeframe, action, entry_price, stop_loss,
+               take_profit, quantity, risk_amount_usdt, rsi, ema20, ema50,
+               ai_decision=None, ai_confidence=None, ai_reasoning=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO trades (portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,quantity,risk_amount_usdt,signal_rsi,signal_ema20,signal_ema50) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
-                (portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,quantity,risk_amount_usdt,rsi,ema20,ema50))
+            cur.execute(
+                "INSERT INTO trades "
+                "(portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,"
+                "quantity,risk_amount_usdt,signal_rsi,signal_ema20,signal_ema50,"
+                "ai_decision,ai_confidence,ai_reasoning) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                (portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,
+                 quantity,risk_amount_usdt,rsi,ema20,ema50,
+                 ai_decision or "PENDING",ai_confidence,ai_reasoning))
             r = cur.fetchone(); conn.commit(); return _row(cur, r)
     finally: release_conn(conn)
 
@@ -153,8 +172,10 @@ def get_trades(limit=20, timeframe=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            if timeframe: cur.execute("SELECT * FROM trades WHERE timeframe=%s ORDER BY created_at DESC LIMIT %s",(timeframe,limit))
-            else: cur.execute("SELECT * FROM trades ORDER BY created_at DESC LIMIT %s",(limit,))
+            if timeframe:
+                cur.execute("SELECT * FROM trades WHERE timeframe=%s ORDER BY created_at DESC LIMIT %s",(timeframe,limit))
+            else:
+                cur.execute("SELECT * FROM trades ORDER BY created_at DESC LIMIT %s",(limit,))
             return [_row(cur, r) for r in cur.fetchall()]
     finally: release_conn(conn)
 
@@ -162,21 +183,23 @@ def get_portfolio_stats():
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute('''SELECT p.current_capital_usdt, p.initial_capital_usdt,
-                COUNT(t.id) FILTER (WHERE t.status!=''OPEN'') as total_trades,
+            cur.execute("""SELECT p.current_capital_usdt, p.initial_capital_usdt,
+                COUNT(t.id) FILTER (WHERE t.status<>'OPEN') as total_trades,
                 COUNT(t.id) FILTER (WHERE t.pnl_usdt>0) as trades_ganhos,
-                COUNT(t.id) FILTER (WHERE t.pnl_usdt<=0 AND t.status!=''OPEN'') as trades_perdidos,
-                COALESCE(SUM(t.pnl_usdt) FILTER (WHERE t.status!=''OPEN''),0) as pnl_total_usdt,
+                COUNT(t.id) FILTER (WHERE t.pnl_usdt<=0 AND t.status<>'OPEN') as trades_perdidos,
+                COALESCE(SUM(t.pnl_usdt) FILTER (WHERE t.status<>'OPEN'),0) as pnl_total_usdt,
                 MAX(t.pnl_usdt) as melhor_trade_usdt, MIN(t.pnl_usdt) as pior_trade_usdt
                 FROM portfolio p LEFT JOIN trades t ON t.portfolio_id=p.id
-                WHERE p.is_active=TRUE GROUP BY p.current_capital_usdt, p.initial_capital_usdt''')
+                WHERE p.is_active=TRUE
+                GROUP BY p.current_capital_usdt, p.initial_capital_usdt""")
             row = cur.fetchone()
             if not row: return {}
             data  = _row(cur, row)
             total = data.get("total_trades") or 0; wins = data.get("trades_ganhos") or 0
             data["win_rate"]       = round((wins/total*100) if total>0 else 0, 2)
             data["pnl_total_usdt"] = float(data.get("pnl_total_usdt") or 0)
-            cap=float(data.get("current_capital_usdt") or 0); init=float(data.get("initial_capital_usdt") or 0)
+            cap  = float(data.get("current_capital_usdt") or 0)
+            init = float(data.get("initial_capital_usdt") or 0)
             data["pnl_pct_total"]  = round(((cap-init)/init*100) if init>0 else 0, 2)
             return data
     finally: release_conn(conn)
@@ -185,11 +208,17 @@ def save_daily_summary(summary_date, stats_dict):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute('''INSERT INTO daily_summaries (summary_date,total_signals,executed_trades,winning_trades,losing_trades,pnl_usdt,pnl_eur,win_rate,closing_capital_usdt)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (summary_date) DO UPDATE SET
-                executed_trades=EXCLUDED.executed_trades, winning_trades=EXCLUDED.winning_trades,
-                losing_trades=EXCLUDED.losing_trades, pnl_usdt=EXCLUDED.pnl_usdt,
-                win_rate=EXCLUDED.win_rate, closing_capital_usdt=EXCLUDED.closing_capital_usdt''',
+            cur.execute("""INSERT INTO daily_summaries
+                (summary_date,total_signals,executed_trades,winning_trades,
+                 losing_trades,pnl_usdt,pnl_eur,win_rate,closing_capital_usdt)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (summary_date) DO UPDATE SET
+                executed_trades=EXCLUDED.executed_trades,
+                winning_trades=EXCLUDED.winning_trades,
+                losing_trades=EXCLUDED.losing_trades,
+                pnl_usdt=EXCLUDED.pnl_usdt,
+                win_rate=EXCLUDED.win_rate,
+                closing_capital_usdt=EXCLUDED.closing_capital_usdt""",
                 (summary_date,stats_dict.get("total_signals",0),stats_dict.get("executed_trades",0),
                  stats_dict.get("winning_trades",0),stats_dict.get("losing_trades",0),
                  stats_dict.get("pnl_usdt",0),stats_dict.get("pnl_eur",0),
@@ -201,7 +230,8 @@ def log(level, component, message, trade_id=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO system_logs (level,component,message,trade_id) VALUES (%s,%s,%s,%s)",(level,component,message,trade_id))
+            cur.execute("INSERT INTO system_logs (level,component,message,trade_id) VALUES (%s,%s,%s,%s)",
+                        (level,component,message,trade_id))
             conn.commit()
     except Exception: pass
     finally: release_conn(conn)
