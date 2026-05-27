@@ -1,6 +1,6 @@
 from app import database, fetcher
 from app.config import (SLIPPAGE_PCT, FEE_PCT, TRADING_MODE,
-                        ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER, ATR_TP_MULTIPLIER_MR)
+                        ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER)
 from app.risk_engine import calculate_position_size
 
 def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
@@ -14,9 +14,7 @@ def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
 
     if atr and atr > 0:
         sl_dist = atr * ATR_SL_MULTIPLIER
-        is_mr   = signal.get("strategy") == "mean_reversion"
-        tp_mult = ATR_TP_MULTIPLIER_MR if is_mr else ATR_TP_MULTIPLIER
-        tp_dist = atr * tp_mult
+        tp_dist = atr * ATR_TP_MULTIPLIER
         stop_loss   = entry - sl_dist if action == "BUY" else entry + sl_dist
         take_profit = entry + tp_dist if action == "BUY" else entry - tp_dist
         sl_pct = sl_dist / entry
@@ -28,8 +26,6 @@ def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
 
     capital_usdt = float(portfolio["current_capital_usdt"])
     pos = calculate_position_size(capital_usdt, entry, sl_pct)
-
-    fees = pos["quantity"] * entry * FEE_PCT
 
     trade = database.open_trade(
         portfolio_id     = portfolio["id"],
@@ -113,10 +109,7 @@ def check_and_close_position(trade):
         return None
 
     fees = qty * current * FEE_PCT
-    if action == "BUY":
-        gross = (current - entry) * qty
-    else:
-        gross = (entry - current) * qty
+    gross = (current - entry) * qty if action == "BUY" else (entry - current) * qty
     pnl_usdt = gross - fees - qty * entry * FEE_PCT
 
     eur_rate = fetcher.get_eur_usdt_rate() or 1.0
@@ -128,10 +121,7 @@ def check_and_close_position(trade):
 
     risk = database.get_risk_state()
     consec = risk.get("consecutive_losses") or 0
-    if pnl_usdt > 0:
-        consec = 0
-    else:
-        consec += 1
+    consec = 0 if pnl_usdt > 0 else consec + 1
     database.update_risk_state(
         has_open_position  = False,
         current_trade_id   = None,
