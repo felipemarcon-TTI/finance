@@ -10,7 +10,7 @@ TELEGRAM_BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID      = os.getenv("TELEGRAM_CHAT_ID", "")
 CRYPTOPANIC_TOKEN     = os.getenv("CRYPTOPANIC_TOKEN", "")
 SYMBOLS_OVERRIDE      = os.getenv("SYMBOLS", "")
-TOP_SYMBOLS_COUNT     = int(os.getenv("TOP_SYMBOLS_COUNT", "20"))
+TOP_SYMBOLS_COUNT     = int(os.getenv("TOP_SYMBOLS_COUNT", "30"))
 USE_AI_FILTER         = os.getenv("USE_AI_FILTER", "false").lower() == "true"
 
 EXCLUDED_SYMBOLS = {
@@ -44,5 +44,5 @@ EMA_SHORT              = 20
 EMA_LONG               = 50
 RSI_OVERBOUGHT         = 65
 RSI_OVERSOLD           = 35
-LOOP_INTERVAL_SECONDS  = 60
+LOOP_INTERVAL_SECONDS  = 120
 MONITOR_INTERVAL_SECONDS = 30
