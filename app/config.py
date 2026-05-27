@@ -19,7 +19,7 @@ EXCLUDED_SYMBOLS = {
 }
 
 TIMEFRAMES             = ["4h", "1h", "15m"]
-RISK_PER_TRADE_PCT     = 0.03
+RISK_PER_TRADE_PCT     = 0.06
 SLIPPAGE_PCT           = 0.001
 FEE_PCT                = 0.001
 MAX_TRADES_PER_DAY     = 5
@@ -31,6 +31,7 @@ DEFAULT_TP_PCT         = 0.030
 ATR_PERIOD             = 14
 ATR_SL_MULTIPLIER      = 1.5
 ATR_TP_MULTIPLIER      = 3.0
+ATR_TP_MULTIPLIER_MR   = 2.0
 
 ADX_PERIOD             = 14
 ADX_MIN_TREND          = 25

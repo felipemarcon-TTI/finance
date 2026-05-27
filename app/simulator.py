@@ -1,21 +1,22 @@
 from app import database, fetcher
 from app.config import (SLIPPAGE_PCT, FEE_PCT, TRADING_MODE,
-                        ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER)
+                        ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER, ATR_TP_MULTIPLIER_MR)
 from app.risk_engine import calculate_position_size
 
 def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
-    action   = signal["action"]
-    symbol   = signal["symbol"]
+    action    = signal["action"]
+    symbol    = signal["symbol"]
     timeframe = signal["timeframe"]
     raw_price = signal["price"]
-    atr      = signal.get("atr", 0)
+    atr       = signal.get("atr", 0)
 
-    slip = raw_price * SLIPPAGE_PCT
     entry = raw_price * (1 + SLIPPAGE_PCT) if action == "BUY" else raw_price * (1 - SLIPPAGE_PCT)
 
     if atr and atr > 0:
         sl_dist = atr * ATR_SL_MULTIPLIER
-        tp_dist = atr * ATR_TP_MULTIPLIER
+        is_mr   = signal.get("strategy") == "mean_reversion"
+        tp_mult = ATR_TP_MULTIPLIER_MR if is_mr else ATR_TP_MULTIPLIER
+        tp_dist = atr * tp_mult
         stop_loss   = entry - sl_dist if action == "BUY" else entry + sl_dist
         take_profit = entry + tp_dist if action == "BUY" else entry - tp_dist
         sl_pct = sl_dist / entry
