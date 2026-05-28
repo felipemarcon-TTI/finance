@@ -16,6 +16,7 @@ USE_AI_FILTER         = os.getenv("USE_AI_FILTER", "false").lower() == "true"
 EXCLUDED_SYMBOLS = {
     "USDCUSDT","BUSDUSDT","TUSDUSDT","USDPUSDT","FDUSDUSDT",
     "USDSUSDT","EURUSDT","GBPUSDT","AUDUSDT","BRLUS","PAXUSDT",
+    "USD1USDT","RLUSDUSDT",
 }
 
 TIMEFRAMES             = ["4h", "1h", "15m"]
@@ -46,3 +47,20 @@ RSI_OVERBOUGHT         = 65
 RSI_OVERSOLD           = 35
 LOOP_INTERVAL_SECONDS  = 120
 MONITOR_INTERVAL_SECONDS = 30
+
+# Sprint 4: regime-adaptive strategy presets
+# BULL (>=60% symbols have EMA20>EMA50): Sprint 2 params + trend signals
+# BEAR (otherwise): conservative MR-only with extreme RSI thresholds
+STRATEGY_PRESETS = {
+    "BULL": {
+        "mr_rsi_os":  30, "mr_rsi_ob":  70,
+        "sl_mult": 1.5,   "tp_mult": 3.0,
+        "use_trend": True,
+    },
+    "BEAR": {
+        "mr_rsi_os":  20, "mr_rsi_ob":  80,
+        "sl_mult": 1.0,   "tp_mult": 1.5,
+        "use_trend": False,
+    },
+}
+REGIME_BULL_THRESHOLD = 0.60

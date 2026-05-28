@@ -1,14 +1,13 @@
 import time as _time
-from app import database, fetcher, indicators
+from app import database, fetcher, indicators, regime_detector
 from app.config import (RSI_OVERSOLD, RSI_OVERBOUGHT, TIMEFRAMES,
                         ADX_MIN_TREND,
-                        FUNDING_RATE_MAX_BUY, FUNDING_RATE_MIN_SELL)
+                        FUNDING_RATE_MAX_BUY, FUNDING_RATE_MIN_SELL,
+                        STRATEGY_PRESETS)
 
 _4h_cache: dict = {}
 _4H_TTL = 3600
-
-_RSI_MR_OVERSOLD  = 30
-_RSI_MR_OVERBOUGHT = 70
+_4h_candle_store: dict = {}
 
 
 def _get_4h_candles(symbol: str) -> list:
@@ -20,6 +19,7 @@ def _get_4h_candles(symbol: str) -> list:
     candles = fetcher.get_klines(symbol, "4h", limit=60)
     if candles:
         _4h_cache[symbol] = (now, candles)
+        _4h_candle_store[symbol] = candles
     return candles or []
 
 
@@ -86,6 +86,9 @@ def detect_mean_reversion(symbol: str):
     if len(candles) < 20:
         return None
 
+    regime = regime_detector.get_regime(_4h_candle_store)
+    preset = STRATEGY_PRESETS[regime]
+
     ind   = indicators.calculate_all(candles)
     rsi   = ind["rsi"]
     price = ind["current_price"]
@@ -93,14 +96,13 @@ def detect_mean_reversion(symbol: str):
     atr   = ind.get("atr")
 
     action = None
-    if rsi < _RSI_MR_OVERSOLD:
+    if rsi < preset["mr_rsi_os"]:
         action = "BUY"
-    elif rsi > _RSI_MR_OVERBOUGHT:
+    elif rsi > preset["mr_rsi_ob"]:
         action = "SELL"
     if not action:
         return None
 
-    # Skip capitulation: RSI<30 in downtrend = still falling, not reverting
     trend = _get_4h_trend(symbol)
     if action == "BUY"  and trend == "DOWN":
         return None
@@ -119,11 +121,14 @@ def detect_mean_reversion(symbol: str):
         "action": action, "symbol": symbol, "timeframe": "4h_mr",
         "price": price, "rsi": rsi, "ema20": ema20, "ema50": ema50,
         "atr": atr, "funding": funding, "trend_4h": trend,
-        "strategy": "mean_reversion",
+        "strategy": "mean_reversion", "regime": regime,
+        "sl_mult": preset["sl_mult"], "tp_mult": preset["tp_mult"],
     }
 
 
 def check_all_timeframes(symbol):
-    result = {tf: detect_signal(symbol, tf) for tf in TIMEFRAMES}
-    result["4h_mr"] = detect_mean_reversion(symbol)
+    result = {"4h_mr": detect_mean_reversion(symbol)}
+    regime = regime_detector.get_regime(_4h_candle_store)
+    if STRATEGY_PRESETS[regime]["use_trend"]:
+        result.update({tf: detect_signal(symbol, tf) for tf in TIMEFRAMES})
     return result

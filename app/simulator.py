@@ -9,12 +9,14 @@ def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
     timeframe = signal["timeframe"]
     raw_price = signal["price"]
     atr       = signal.get("atr", 0)
+    sl_mult   = signal.get("sl_mult", ATR_SL_MULTIPLIER)
+    tp_mult   = signal.get("tp_mult", ATR_TP_MULTIPLIER)
 
     entry = raw_price * (1 + SLIPPAGE_PCT) if action == "BUY" else raw_price * (1 - SLIPPAGE_PCT)
 
     if atr and atr > 0:
-        sl_dist = atr * ATR_SL_MULTIPLIER
-        tp_dist = atr * ATR_TP_MULTIPLIER
+        sl_dist = atr * sl_mult
+        tp_dist = atr * tp_mult
         stop_loss   = entry - sl_dist if action == "BUY" else entry + sl_dist
         take_profit = entry + tp_dist if action == "BUY" else entry - tp_dist
         sl_pct = sl_dist / entry
@@ -53,7 +55,8 @@ def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
         trades_today      = (risk.get("trades_today") or 0) + 1,
     )
 
-    print(f"[sim] TRADE OPEN {action} {symbol} @ {entry:.4f} SL={stop_loss:.4f} TP={take_profit:.4f} qty={pos['quantity']:.6f}")
+    regime = signal.get("regime", "?")
+    print(f"[sim] TRADE OPEN {action} {symbol} @ {entry:.4f} SL={stop_loss:.4f} TP={take_profit:.4f} qty={pos['quantity']:.6f} regime={regime}")
     return trade
 
 def check_and_close_position(trade):
@@ -71,11 +74,12 @@ def check_and_close_position(trade):
 
     signal_atr = float(trade.get("signal_atr") or 0)
     if signal_atr > 0:
-        sl_dist = signal_atr * ATR_SL_MULTIPLIER
+        # Use stored entry/stop_loss for exact sl_dist (regime-agnostic)
+        sl_dist = abs(entry - float(trade["stop_loss"]))
         if action == "BUY":
-            if current >= entry + 2 * sl_dist:
+            if current >= entry + 2 * signal_atr:
                 new_sl = max(sl, current - sl_dist)
-            elif current >= entry + sl_dist:
+            elif current >= entry + signal_atr:
                 new_sl = max(sl, entry)
             else:
                 new_sl = None
@@ -83,9 +87,9 @@ def check_and_close_position(trade):
                 database.update_trade_sl(trade["id"], new_sl)
                 sl = new_sl
         else:
-            if current <= entry - 2 * sl_dist:
+            if current <= entry - 2 * signal_atr:
                 new_sl = min(sl, current + sl_dist)
-            elif current <= entry - sl_dist:
+            elif current <= entry - signal_atr:
                 new_sl = min(sl, entry)
             else:
                 new_sl = None
