@@ -37,6 +37,9 @@ def init_db():
                 closed_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS symbol VARCHAR(20) DEFAULT 'BTCUSDT'")
             cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS signal_atr NUMERIC(20,8)")
+            # Distancia de stop original (|entry - stop_loss inicial|), fixada na abertura.
+            # Usada pelo trailing para manter o gap constante mesmo depois de mover o SL.
+            cur.execute("ALTER TABLE trades ADD COLUMN IF NOT EXISTS signal_sl_dist NUMERIC(20,8)")
             cur.execute('''CREATE TABLE IF NOT EXISTS signals (
                 id SERIAL PRIMARY KEY, symbol VARCHAR(20), timeframe VARCHAR(5), action VARCHAR(10),
                 price NUMERIC(20,8), rsi NUMERIC(10,4), ema20 NUMERIC(20,8), ema50 NUMERIC(20,8),
@@ -111,7 +114,10 @@ def reset_daily_state_if_needed():
             cur.execute("SELECT trading_date FROM risk_state WHERE id=1")
             row = cur.fetchone()
             if row and row[0] != date.today():
-                cur.execute("UPDATE risk_state SET trades_today=0,daily_pnl_usdt=0,trading_date=CURRENT_DATE WHERE id=1")
+                # Reseta contadores diarios. consecutive_losses tambem eh zerado aqui:
+                # o breaker de perdas consecutivas eh um cooldown diario, nao um kill permanente
+                # (antes so zerava com um trade vencedor -> travava o bot para sempre apos 3 perdas).
+                cur.execute("UPDATE risk_state SET trades_today=0,daily_pnl_usdt=0,consecutive_losses=0,trading_date=CURRENT_DATE WHERE id=1")
                 conn.commit()
     finally: release_conn(conn)
 
@@ -126,18 +132,19 @@ def save_signal(symbol, timeframe, action, price, rsi, ema20, ema50):
 
 def open_trade(portfolio_id, symbol, timeframe, action, entry_price, stop_loss,
                take_profit, quantity, risk_amount_usdt, rsi, ema20, ema50,
-               ai_decision=None, ai_confidence=None, ai_reasoning=None, signal_atr=None):
+               ai_decision=None, ai_confidence=None, ai_reasoning=None, signal_atr=None,
+               signal_sl_dist=None):
     conn = get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO trades "
                 "(portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,"
-                "quantity,risk_amount_usdt,signal_rsi,signal_ema20,signal_ema50,signal_atr,"
+                "quantity,risk_amount_usdt,signal_rsi,signal_ema20,signal_ema50,signal_atr,signal_sl_dist,"
                 "ai_decision,ai_confidence,ai_reasoning) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
                 (portfolio_id,symbol,timeframe,action,entry_price,stop_loss,take_profit,
-                 quantity,risk_amount_usdt,rsi,ema20,ema50,signal_atr,
+                 quantity,risk_amount_usdt,rsi,ema20,ema50,signal_atr,signal_sl_dist,
                  ai_decision or "PENDING",ai_confidence,ai_reasoning))
             r = cur.fetchone(); conn.commit(); return _row(cur, r)
     finally: release_conn(conn)

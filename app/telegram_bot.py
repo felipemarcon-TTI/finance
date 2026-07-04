@@ -99,8 +99,10 @@ async def cmd_kill(u:Update,c:ContextTypes.DEFAULT_TYPE):
 
 async def cmd_resume(u:Update,c:ContextTypes.DEFAULT_TYPE):
     try:
-        database.update_risk_state(kill_switch_active=False,kill_switch_reason=None)
-        await u.message.reply_text("Kill switch OFF. Bot retomando operacoes.")
+        # Retomar tambem zera o breaker de perdas consecutivas (senao o /resume nao
+        # destrava o bot quando ele parou por 3 perdas seguidas).
+        database.update_risk_state(kill_switch_active=False,kill_switch_reason=None,consecutive_losses=0)
+        await u.message.reply_text("Kill switch OFF + perdas consecutivas zeradas. Bot retomando operacoes.")
     except Exception as e:
         await u.message.reply_text(f"Erro: {e}")
 

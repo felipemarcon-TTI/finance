@@ -46,6 +46,7 @@ def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
         ai_confidence    = ai_confidence,
         ai_reasoning     = ai_reasoning,
         signal_atr       = atr if atr and atr > 0 else None,
+        signal_sl_dist   = abs(entry - stop_loss),  # distancia de stop original (fixa p/ o trailing)
     )
 
     risk = database.get_risk_state()
@@ -74,8 +75,11 @@ def check_and_close_position(trade):
 
     signal_atr = float(trade.get("signal_atr") or 0)
     if signal_atr > 0:
-        # Use stored entry/stop_loss for exact sl_dist (regime-agnostic)
-        sl_dist = abs(entry - float(trade["stop_loss"]))
+        # Gap do trailing = distancia de stop ORIGINAL (fixa), nao a atual.
+        # Antes usava abs(entry - stop_loss), mas stop_loss eh movido pelo trailing:
+        # apos o breakeven (stop_loss==entry) o gap virava 0 e o trailing colava no
+        # preco, fechando o trade ao tocar +2 ATR (TP de 3 ATR nunca era atingido).
+        sl_dist = float(trade.get("signal_sl_dist") or 0) or (signal_atr * ATR_SL_MULTIPLIER)
         if action == "BUY":
             if current >= entry + 2 * signal_atr:
                 new_sl = max(sl, current - sl_dist)
