@@ -79,7 +79,10 @@ class Scheduler:
 
         utc   = datetime.now(timezone.utc)
         today = date.today()
-        if utc.hour == 23 and utc.minute == 59 and self._summary_done != today:
+        # Janela larga (23:55-23:59) em vez de exatamente 23:59: com loop de 120s um
+        # tick podia pular o minuto 59 e o resumo do dia nunca era gerado. O guard
+        # _summary_done garante que roda so uma vez por dia.
+        if utc.hour == 23 and utc.minute >= 55 and self._summary_done != today:
             self._summary_done = today
             self._daily_summary()
 
