@@ -32,7 +32,10 @@ def _run():
                         ("kill",cmd_kill),("resume",cmd_resume),("help",cmd_help)]:
             _app.add_handler(CommandHandler(name,fn))
         print("[telegram] polling started")
-        _app.run_polling(close_loop=False)
+        # stop_signals=None: run_polling roda numa thread secundaria e o default tenta
+        # instalar signal handlers (SIGINT/SIGTERM), que so funcionam na thread principal
+        # -> sem isso, o polling crashava e os comandos (/status) nunca respondiam.
+        _app.run_polling(close_loop=False, stop_signals=None)
     except Exception as e:
         print(f"[telegram] FATAL ERROR: {e}")
         traceback.print_exc()
