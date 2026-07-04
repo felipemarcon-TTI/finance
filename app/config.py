@@ -19,12 +19,15 @@ EXCLUDED_SYMBOLS = {
     "USD1USDT","RLUSDUSDT",
 }
 
-# ---- v3: config DEFENSIVA (backtest 5 janelas 2025-2026, ver scripts/backtest.py) ----
-# Escolhida por criterio MAXIMIN (pior janela = -0.3%; 4/5 janelas positivas; holdout +0.1%).
-# IMPORTANTE: a variante "agressiva" (2-4 trades/dia) foi FALSIFICADA no holdout (-32%);
-# esta config prioriza nao quebrar. Expectativa honesta: ~0 a +2%/trimestre, ~0.6 trades/dia.
+# ---- v3: config DEFENSIVA-baixo-DD (backtest 5 janelas 2025-2026, ver scripts/backtest.py) ----
 # Setup unico: trend-following por cruzamento de EMAs LENTAS (50x100) no 4h, long E short,
-# candle FECHADO, SL/TP largos (2.5/5.0 ATR), SEM trailing, SEM mean-reversion.
+# candle FECHADO, SL 1.5 / TP 3.0 ATR, SEM trailing, SEM mean-reversion.
+# Escolhida por MENOR DRAWDOWN no teste de 1 ano continuo (jul/25-jul/26, compounding):
+# +28% no ano com maxDD 13% (vs +30%/DD 21% da variante SL2.5/TP5). ~0.75 trades/dia.
+# IMPORTANTE: a variante "agressiva" (MR, 1.6 trades/dia) foi FALSIFICADA no holdout (-32%)
+# e perde no ano (-16%). O lucro vem majoritariamente dos SHORTS (sem short, -13% no ano).
+# Expectativa HONESTA: grande parte do +28% e in-sample (calibracao); no holdout isolado
+# esta config deu ~-1.9%/trimestre. Tratar como forward-test em paper, nao lucro validado.
 TIMEFRAMES             = ["4h"]
 RISK_PER_TRADE_PCT     = 0.015
 SLIPPAGE_PCT           = 0.001
@@ -41,10 +44,10 @@ CASH_USAGE_CAP            = 0.95   # notional total <= 95% do capital (sem alava
 DAILY_STOP_PCT            = 0.05   # perda diaria max sobre capital do INICIO do dia
 
 ATR_PERIOD             = 14
-ATR_SL_MULTIPLIER      = 2.5
-ATR_TP_MULTIPLIER      = 5.0
+ATR_SL_MULTIPLIER      = 1.5
+ATR_TP_MULTIPLIER      = 3.0
 # Trailing stop DESATIVADO (v3): no backtest, o trailing/breakeven convertia winners em
-# scratch-losses; SL/TP largos e fixos foram mais robustos em todas as janelas.
+# scratch-losses; SL/TP fixos foram mais robustos em todas as janelas.
 TRAILING_ENABLED       = False
 
 ADX_PERIOD             = 14
@@ -74,11 +77,11 @@ USE_MEAN_REVERSION = os.getenv("USE_MEAN_REVERSION", "false").lower() == "true"
 STRATEGY_PRESETS = {
     "BULL": {
         "mr_rsi_os":  30, "mr_rsi_ob":  70,
-        "sl_mult": 2.5,   "tp_mult": 5.0,
+        "sl_mult": 1.5,   "tp_mult": 3.0,
     },
     "BEAR": {
         "mr_rsi_os":  25, "mr_rsi_ob":  75,
-        "sl_mult": 2.5,   "tp_mult": 5.0,
+        "sl_mult": 1.5,   "tp_mult": 3.0,
     },
 }
 # Histerese anti flip-flop: sobe p/ BULL em >=0.60, so volta p/ BEAR em <0.45

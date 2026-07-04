@@ -29,7 +29,7 @@ Bot de simulacao de trading com Python 3.11, PostgreSQL e Telegram. Deploy 100% 
 ## Estrategia (v3 — config DEFENSIVA)
 - **Setup**: cruzamento EMA50 x EMA100 no 4h (long e short), RSI 35-65, ADX >= 20,
   filtro de funding ±0.05%. Avaliacao **somente em candle fechado** (boundary de 4h).
-- **Saidas**: SL 2.5 ATR / TP 5.0 ATR fixos, **sem trailing**. Monitor de posicoes a cada 30s.
+- **Saidas**: SL 1.5 ATR / TP 3.0 ATR fixos, **sem trailing**. Monitor de posicoes a cada 30s.
 - **Risco**: 1.5%/trade, max 6 posicoes, 8 trades/dia, notional max 20%/posicao e 95% total
   (sem alavancagem), stop diario -5% sobre o capital do inicio do dia, breaker de 3 perdas
   consecutivas com reset diario.
@@ -38,11 +38,12 @@ Bot de simulacao de trading com Python 3.11, PostgreSQL e Telegram. Deploy 100% 
 - **Short**: sintetico sobre precos spot (paper). Live exigiria conta de futuros.
 
 ### Por que esta config (validacao honesta)
-Backtest fiel em 5 janelas de 90d (2025-2026), 70+ configs, holdout intocado
-(`scripts/backtest.py`). A variante "agressiva" (2-4 trades/dia) foi **falsificada** no
-holdout (-32%). Esta config foi escolhida por **maximin** (pior janela): -0.3% no pior
-trimestre, 4/5 janelas positivas, holdout +0.1%. Expectativa honesta: ~0 a +2%/trimestre,
-~0.6 trades/dia. E um **forward-test em paper**, nao uma maquina de dinheiro validada.
+Backtest fiel (2025-2026), 70+ configs, holdout intocado (`scripts/backtest.py`).
+A variante "agressiva" (MR) foi **falsificada** no holdout (-32%) e perde no ano (-16%).
+Esta config foi escolhida por **menor drawdown** no teste de 1 ano continuo:
++28% no ano (compounding) com maxDD 13%, ~0.75 trades/dia. Os **shorts sao o motor**
+do resultado (sem short: -13% no ano). Ressalva honesta: boa parte do +28% e in-sample;
+no holdout isolado deu ~-1.9%/trimestre. E um **forward-test em paper**, nao lucro validado.
 
 ### Backtest / calibracao
 ```
