@@ -65,6 +65,10 @@ def init_db():
                 level VARCHAR(10) CHECK (level IN ('INFO','WARN','ERROR')),
                 component VARCHAR(50), message TEXT, trade_id INTEGER,
                 created_at TIMESTAMPTZ DEFAULT NOW())''')
+            # v3: base do stop diario = capital no inicio do dia (nao o capital inicial de sempre)
+            cur.execute("ALTER TABLE risk_state ADD COLUMN IF NOT EXISTS day_start_capital_usdt NUMERIC(20,8)")
+            # o monitor consulta status='OPEN' a cada 30s
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status)")
             conn.commit()
     finally: release_conn(conn)
 
@@ -117,8 +121,23 @@ def reset_daily_state_if_needed():
                 # Reseta contadores diarios. consecutive_losses tambem eh zerado aqui:
                 # o breaker de perdas consecutivas eh um cooldown diario, nao um kill permanente
                 # (antes so zerava com um trade vencedor -> travava o bot para sempre apos 3 perdas).
-                cur.execute("UPDATE risk_state SET trades_today=0,daily_pnl_usdt=0,consecutive_losses=0,trading_date=CURRENT_DATE WHERE id=1")
+                # v3: congela o capital do inicio do dia como base do stop diario de -5%.
+                cur.execute("""UPDATE risk_state SET trades_today=0,daily_pnl_usdt=0,consecutive_losses=0,
+                    trading_date=CURRENT_DATE,
+                    day_start_capital_usdt=(SELECT current_capital_usdt FROM portfolio WHERE is_active=TRUE ORDER BY id DESC LIMIT 1)
+                    WHERE id=1""")
                 conn.commit()
+    finally: release_conn(conn)
+
+def purge_old_rows():
+    """Retencao (v3): logs 30d, sinais 90d - chamado no resumo diario."""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM system_logs WHERE created_at < NOW() - INTERVAL '30 days'")
+            cur.execute("DELETE FROM signals WHERE detected_at < NOW() - INTERVAL '90 days'")
+            conn.commit()
+    except Exception: pass
     finally: release_conn(conn)
 
 def save_signal(symbol, timeframe, action, price, rsi, ema20, ema50):
