@@ -5,9 +5,21 @@ from app import database
 from app.config import TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,TRADING_MODE
 
 _app=None
+_API=f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}" if TELEGRAM_BOT_TOKEN else None
+
 def start():
-    if not TELEGRAM_BOT_TOKEN: print("[telegram] DISABLED - TELEGRAM_BOT_TOKEN not set"); return
-    print(f"[telegram] starting polling thread")
+    if not TELEGRAM_BOT_TOKEN:
+        print("[telegram] DISABLED - TELEGRAM_BOT_TOKEN not set"); return
+    if not TELEGRAM_CHAT_ID:
+        print("[telegram] WARN - TELEGRAM_CHAT_ID not set: comandos funcionam, mas notificacoes push nao")
+    # self-test do token no boot (aparece nos logs do Railway)
+    try:
+        me=requests.get(f"{_API}/getMe",timeout=8).json()
+        if me.get("ok"): print(f"[telegram] token OK: @{me['result'].get('username')}")
+        else: print(f"[telegram] token INVALIDO: {me}")
+    except Exception as e:
+        print(f"[telegram] getMe error: {e}")
+    print("[telegram] starting polling thread")
     threading.Thread(target=_run,daemon=True).start()
 
 def _run():
@@ -27,6 +39,16 @@ def _run():
 
 def notify(msg):
     print(f"[tg] {msg}")
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return  # sem token/chat_id -> so log (nao quebra o loop de trading)
+    try:
+        r=requests.post(f"{_API}/sendMessage",
+            json={"chat_id":TELEGRAM_CHAT_ID,"text":msg,"disable_web_page_preview":True},
+            timeout=8)
+        if r.status_code!=200:
+            print(f"[tg] sendMessage FAIL {r.status_code}: {r.text[:200]}")
+    except Exception as e:
+        print(f"[tg] sendMessage error: {e}")
 
 def notify_signal(s): notify(f"Sinal {s.get('action')} {s.get('timeframe')} ${s.get('price',0):.2f} RSI:{s.get('rsi',0):.1f}")
 def notify_trade_opened(trade,approved,reason):
