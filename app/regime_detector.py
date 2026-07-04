@@ -6,6 +6,11 @@ _cache = {"regime": "BEAR", "ts": 0.0}
 _TTL   = 3600
 
 
+def current_regime() -> str:
+    """Ultimo regime calculado (para exibir no /status sem recomputar)."""
+    return _cache["regime"]
+
+
 def get_regime(candle_store: dict) -> str:
     now = _time.monotonic()
     if now - _cache["ts"] < _TTL and _cache["ts"] > 0:
