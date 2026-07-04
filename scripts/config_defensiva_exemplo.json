@@ -1,0 +1,27 @@
+[
+ {
+  "name": "FINAL_e50-100_MR35_sl1.5tp3_adx20",
+  "timeframes": [
+   "4h"
+  ],
+  "ema_pair": [
+   50,
+   100
+  ],
+  "adx_min": 20,
+  "trailing": "off",
+  "sl_mult": 1.5,
+  "tp_mult": 3.0,
+  "sl_mult_bear": 1.5,
+  "tp_mult_bear": 3.0,
+  "mr_enabled": true,
+  "mr_bull": [
+   35,
+   65
+  ],
+  "mr_bear": [
+   35,
+   65
+  ]
+ }
+]

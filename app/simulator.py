@@ -1,7 +1,11 @@
 from app import database, fetcher
 from app.config import (SLIPPAGE_PCT, FEE_PCT, TRADING_MODE,
-                        ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER)
-from app.risk_engine import calculate_position_size
+                        ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER, TRAILING_ENABLED)
+from app.risk_engine import calculate_position_size, _committed_notional
+
+# NOTA (v3): SELL = short SINTETICO sobre precos spot (paper trading). Operar short em
+# dinheiro real exigiria conta de futuros USDT-M (margem, funding pago/recebido, risco
+# de liquidacao) - fora do escopo do modo simulation.
 
 def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
     action    = signal["action"]
@@ -27,7 +31,10 @@ def execute_trade(signal, portfolio, ai_confidence=None, ai_reasoning=None):
         take_profit = entry * (1 + DEFAULT_TP_PCT) if action == "BUY" else entry * (1 - DEFAULT_TP_PCT)
 
     capital_usdt = float(portfolio["current_capital_usdt"])
-    pos = calculate_position_size(capital_usdt, entry, sl_pct)
+    committed = _committed_notional(database.get_all_open_trades())
+    pos = calculate_position_size(capital_usdt, entry, sl_pct, committed_usdt=committed)
+    if pos["quantity"] <= 0:
+        return None
 
     trade = database.open_trade(
         portfolio_id     = portfolio["id"],
@@ -74,7 +81,10 @@ def check_and_close_position(trade):
         return None
 
     signal_atr = float(trade.get("signal_atr") or 0)
-    if signal_atr > 0:
+    # v3: trailing DESATIVADO por padrao (TRAILING_ENABLED=False). No backtest 2025-2026,
+    # o trailing/breakeven convertia winners em scratch-losses; SL/TP fixos e largos
+    # (2.5/5.0 ATR) foram mais robustos. Codigo mantido para reativacao futura.
+    if TRAILING_ENABLED and signal_atr > 0:
         # Gap do trailing = distancia de stop ORIGINAL (fixa), nao a atual.
         # Antes usava abs(entry - stop_loss), mas stop_loss eh movido pelo trailing:
         # apos o breakeven (stop_loss==entry) o gap virava 0 e o trailing colava no

@@ -52,8 +52,13 @@ def calculate_volume_ratio(candles, period=20):
 
 def calculate_all(candles):
     closes  = [c["close"]  for c in candles]
-    ema20, prev_ema20 = calculate_ema(closes, EMA_SHORT)
-    ema50, prev_ema50 = calculate_ema(closes, EMA_LONG)
+    # v3: dois pares de EMA com papeis distintos.
+    # - ema20/ema50 (FIXOS 20/50): filtro de tendencia 4h + regime detector (breadth).
+    # - ema_s/ema_l (EMA_SHORT/EMA_LONG do config, v3=50/100): cruzamento do sinal de trend.
+    ema20, prev_ema20 = calculate_ema(closes, 20)
+    ema50, prev_ema50 = calculate_ema(closes, 50)
+    ema_s, prev_ema_s = calculate_ema(closes, EMA_SHORT)
+    ema_l, prev_ema_l = calculate_ema(closes, EMA_LONG)
     rsi      = calculate_rsi(closes)
     atr      = calculate_atr(candles)
     adx      = calculate_adx(candles)
@@ -62,5 +67,7 @@ def calculate_all(candles):
         "current_price": closes[-1],
         "ema20": ema20, "ema50": ema50,
         "prev_ema20": prev_ema20, "prev_ema50": prev_ema50,
+        "ema_s": ema_s, "ema_l": ema_l,
+        "prev_ema_s": prev_ema_s, "prev_ema_l": prev_ema_l,
         "rsi": rsi, "atr": atr, "adx": adx, "volume_ratio": vol_ratio,
     }
